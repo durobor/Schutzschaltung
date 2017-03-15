@@ -33,16 +33,15 @@
 const int sensorPin = A7;       // select the input pin for the potentiometer
 const int buttonPin = 7;        // the number of the pushbutton pinf
 const int ledPin =  2;          // the number of the LED pin
-const int current_val =185 ;    // datasheet says 185mV/A
-const int offset_val  =2500;    // datasheet saya 0.5*Vcc Vcc=5V=2.5V
-int sensorValue=0;
+const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
+const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
+int zeroAmpereSensorVal;
+float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
 int sensorValuesSize;
 volatile int sensorValuesIndx;
+int sensorValuesIndxCopy;
 const int readInterval = 2000;  // read sensor value every 2000 micro seconds (500 reads/s)
-
-int startTime;
-bool outputDone = false;
 
 void initializeSensorValues() {
   sensorValuesSize = ( sizeof ( sensorValues ) / sizeof ( int ) );
@@ -57,30 +56,33 @@ void sensorRead() {
   sensorValuesIndx = ( sensorValuesIndx + 1 ) % sensorValuesSize;
 }
 
+void initializeZeroAmpereSensorVal() {
+  zeroAmpereSensorVal = 512;
+}
+
+void initializeSensorValueToCurrentFactor() {
+  sensorValueToCurrentFactor = 5000. / 1024. / sensorCurrentScaling;
+}
+
+float sensorValueToCurrent ( int sensorVal ) {
+  return ( sensorVal - zeroAmpereSensorVal ) * sensorValueToCurrentFactor;
+}
+
 // the setup function runs once when you press reset or power the board
 void setup() {
-  // initialize digital pin 13 as an output.
-  Serial.begin(9600);
-  
+  noInterrupts();
+  initializeSensorValueToCurrentFactor();
+  initializeZeroAmpereSensorVal();
   initializeSensorValues();
   Timer1.initialize ( readInterval );
   Timer1.attachInterrupt ( sensorRead );
-  
-  startTime = micros();
-  delay(1000);
+  interrupts();
 }
 
 // the loop function runs over and over again forever
 void loop() {
   noInterrupts();
-  if ( !outputDone ) {
-  for ( sensorValuesIndx = 0 ; sensorValuesSize > sensorValuesIndx ; sensorValuesIndx++ ) {
-    Serial.print ( "sensor = " );
-    Serial.print ( sensorValues [ sensorValuesIndx ] );
-    Serial.println ( "" );
-  }  
-  outputDone = true;
-  }
+  sensorValuesIndxCopy = sensorValuesIndx;
   interrupts();
 }
 
