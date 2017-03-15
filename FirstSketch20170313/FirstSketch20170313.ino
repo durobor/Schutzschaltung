@@ -40,8 +40,10 @@ float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
 int sensorValuesSize;
 volatile int sensorValuesIndx;
-int sensorValuesIndxCopy;
 const int readInterval = 2000;  // read sensor value every 2000 micro seconds (500 reads/s)
+int nmbrOfReadsIn20ms = 10;
+volatile float sumSensorValues20ms = 0;
+int currentCapacity = 500;      // 500mA
 
 void initializeSensorValues() {
   sensorValuesSize = ( sizeof ( sensorValues ) / sizeof ( int ) );
@@ -52,8 +54,12 @@ void initializeSensorValues() {
 }
 
 void sensorRead() {
-  sensorValues [ sensorValuesIndx ] = analogRead ( sensorPin );
   sensorValuesIndx = ( sensorValuesIndx + 1 ) % sensorValuesSize;
+  sensorValues [ sensorValuesIndx ] = analogRead ( sensorPin ) - zeroAmpereSensorVal;
+  sumSensorValues20ms += sensorValues [ sensorValuesIndx ];
+  if ( nmbrOfReadsIn20ms <= sensorValuesIndx )
+    sumSensorValues20ms -= sensorValues [ sensorValuesIndx - nmbrOfReadsIn20ms ];
+  else sumSensorValues20ms -= sensorValues [ sensorValuesSize + sensorValuesIndx - nmbrOfReadsIn20ms ];
 }
 
 void initializeZeroAmpereSensorVal() {
@@ -65,12 +71,18 @@ void initializeSensorValueToCurrentFactor() {
 }
 
 float sensorValueToCurrent ( int sensorVal ) {
-  return ( sensorVal - zeroAmpereSensorVal ) * sensorValueToCurrentFactor;
+  return sensorVal * sensorValueToCurrentFactor;
+}
+
+void checkCurrent20ms() {
+  if ( currentCapacity * 10 < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) * ( 1000000 / readInterval / nmbrOfReadsIn20ms ) )
+    Serial.println("Cutoff!");
 }
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
+  Serial.begin(9600);
   initializeSensorValueToCurrentFactor();
   initializeZeroAmpereSensorVal();
   initializeSensorValues();
@@ -81,9 +93,5 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  noInterrupts();
-  sensorValuesIndxCopy = sensorValuesIndx;
-  interrupts();
+  checkCurrent20ms();
 }
-
-
