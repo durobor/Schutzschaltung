@@ -1,7 +1,6 @@
 #include <TimerOne.h>
 
 
-
 /*
   Cutterhead Protection 
   for Caruso Prot14 hardware arduino  nanoboard
@@ -44,6 +43,7 @@ int sensorValuesSize10min;
 volatile int sensorValuesIndx;
 volatile int sensorValuesIndx10min;
 const int readInterval = 4000;  // read sensor value every 4000 micro seconds (250 reads/s)
+const int readInterval10min = 2000000;  // read sensor array every 2 seconds
 int nmbrOfReadsIn20ms = 5;
 int nmbrOfReadsIn300ms = 75;
 int nmbrOfReadsIn2000ms = 500;
@@ -74,32 +74,29 @@ void initializeSensorValues() {
 
 void sensorRead() {
   noInterrupts();
-  
-  sensorValuesIndx = ( sensorValuesIndx + 1 ) % sensorValuesSize;
-  
+    
   sumSensorValues2000ms -= sensorValues [ sensorValuesIndx ];
   sensorValues [ sensorValuesIndx ] = analogRead ( sensorPin ) - zeroAmpereSensorVal;
   sumSensorValues2000ms += sensorValues [ sensorValuesIndx ];
   
-  sumSensorValues20ms += sensorValues [ sensorValuesIndx ];
   sumSensorValues20ms -= sensorValues [ ( sensorValuesSize + sensorValuesIndx - nmbrOfReadsIn20ms ) % sensorValuesSize ];
+  sumSensorValues20ms += sensorValues [ sensorValuesIndx ];
 
-  sumSensorValues300ms += sensorValues [ sensorValuesIndx ];
   sumSensorValues300ms -= sensorValues [ ( sensorValuesSize + sensorValuesIndx - nmbrOfReadsIn300ms ) % sensorValuesSize ];
+  sumSensorValues300ms += sensorValues [ sensorValuesIndx ];
+  
+  sensorValuesIndx = ( sensorValuesIndx + 1 ) % sensorValuesSize;
+
+  if ( sensorValuesSize-1 == sensorValuesIndx ) copyCurrentValue2ms();
   
   interrupts();
 }
 
 void copyCurrentValue2ms () {
-  noInterrupts();
-
-  sensorValuesIndx10min = ( sensorValuesIndx10min + 1 ) % sensorValuesSize10min;
   sensorValues10min [ sensorValuesIndx10min ] = sumSensorValues2000ms;
 
-  sumSensorValues10min += sensorValues10min [ sensorValuesIndx10min ];
   sumSensorValues10min -= sensorValues10min [ ( sensorValuesSize10min + sensorValuesIndx10min - nmbrOfReadsIn10min ) % sensorValuesSize10min ];
-
-  interrupts();
+  sumSensorValues10min += sensorValues10min [ sensorValuesIndx10min ];
 }
 
 void initializeZeroAmpereSensorVal() {
@@ -141,16 +138,28 @@ void setup() {
   initializeSensorValueToCurrentFactor();
   initializeZeroAmpereSensorVal();
   initializeSensorValues();
+
   Timer1.initialize ( readInterval );
   Timer1.attachInterrupt ( sensorRead );
-  Timer1.attachInterrupt ( copyCurrentValue2ms, 2000000 );
+
   interrupts();
 }
 
 // the loop function runs over and over again forever
 void loop() {
+  noInterrupts();
   checkCurrent20ms();
+  interrupts();
+
+  noInterrupts();
   checkCurrent300ms();
+  interrupts();
+
+  noInterrupts();
   checkCurrent2000ms();
+  interrupts();
+
+  noInterrupts();
   checkCurrent10min();
+  interrupts();
 }
