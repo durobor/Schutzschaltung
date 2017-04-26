@@ -58,6 +58,14 @@ int currentThreshold300ms = 4;
 int currentThreshold2000ms = 2.75;
 int currentThreshold10min = 2.1;
 
+void initializeSensorValueToCurrentFactor() {
+  sensorValueToCurrentFactor = 5000. / 1024. / sensorCurrentScaling;
+}
+
+void initializeZeroAmpereSensorVal() {
+  zeroAmpereSensorVal = 512;
+}
+
 void initializeSensorValues() {
   sensorValuesSize = ( sizeof ( sensorValues ) / sizeof ( int ) );
   for ( sensorValuesIndx = 0 ; sensorValuesSize > sensorValuesIndx ; sensorValuesIndx++ ) {
@@ -99,18 +107,6 @@ void copyCurrentValue2ms () {
   sumSensorValues10min += sensorValues10min [ sensorValuesIndx10min ];
 }
 
-void initializeZeroAmpereSensorVal() {
-  zeroAmpereSensorVal = 512;
-}
-
-void initializeSensorValueToCurrentFactor() {
-  sensorValueToCurrentFactor = 5000. / 1024. / sensorCurrentScaling;
-}
-
-float sensorValueToCurrent ( int sensorVal ) {
-  return sensorVal * sensorValueToCurrentFactor;
-}
-
 void checkCurrent20ms() {
   if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) /* * ( 1000000 / readInterval / nmbrOfReadsIn20ms ) */ )
     Serial.println("Cutoff! - 20ms");
@@ -131,6 +127,10 @@ void checkCurrent10min() {
     Serial.println("Cutoff! - 10min");
 }
 
+float sensorValueToCurrent ( int sensorVal ) {
+  return sensorVal * sensorValueToCurrentFactor;
+}
+
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
@@ -147,19 +147,8 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  noInterrupts();
   checkCurrent20ms();
-  interrupts();
-
-  noInterrupts();
   checkCurrent300ms();
-  interrupts();
-
-  noInterrupts();
   checkCurrent2000ms();
-  interrupts();
-
-  noInterrupts();
   checkCurrent10min();
-  interrupts();
 }
