@@ -31,9 +31,13 @@
  */
 const int sensorPin = A7;       // select the input pin for the potentiometer
 const int buttonPin = 7;        // the number of the pushbutton pinf
-const int ledPin =  2;          // the number of the LED pin
+//const int ledRelaisPin =  2;    // the number of the LED pin
+const int relaisPin = 666;      // don't know yet
+const int ledRelaisPin = LED_BUILTIN;  // don't know either yet
 const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
 const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
+//volatile int relaisON = LOW;
+//volatile int buttonON = LOW;
 int zeroAmpereSensorVal;
 float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
@@ -52,11 +56,20 @@ volatile float sumSensorValues20ms = 0;
 volatile float sumSensorValues300ms = 0;
 volatile float sumSensorValues2000ms = 0;
 volatile float sumSensorValues10min = 0;
-int currentCapacity = 500;      // 500mA
+int currentCapacity = 630;      // 630mA
+int currentThreshold4ms = 20;
 int currentThreshold20ms = 10;
 int currentThreshold300ms = 4;
 int currentThreshold2000ms = 2.75;
 int currentThreshold10min = 2.1;
+
+void initializeSensor() {
+  relaisOFF();
+  initializeSensorValueToCurrentFactor();
+  initializeZeroAmpereSensorVal();
+  initializeSensorValues();
+  relaisON();
+}
 
 void initializeSensorValueToCurrentFactor() {
   sensorValueToCurrentFactor = 5000. / 1024. / sensorCurrentScaling;
@@ -84,7 +97,8 @@ void sensorRead() {
   noInterrupts();
     
   sumSensorValues2000ms -= sensorValues [ sensorValuesIndx ];
-  sensorValues [ sensorValuesIndx ] = analogRead ( sensorPin ) - zeroAmpereSensorVal;
+  sensorValues [ sensorValuesIndx ] = abs ( analogRead ( sensorPin ) - zeroAmpereSensorVal );
+  if ( currentCapacity * currentThreshold4ms < sensorValueToCurrent ( sensorValues [ sensorValuesIndx ] ) ) relaisOFF();
   sumSensorValues2000ms += sensorValues [ sensorValuesIndx ];
   
   sumSensorValues20ms -= sensorValues [ ( sensorValuesSize + sensorValuesIndx - nmbrOfReadsIn20ms ) % sensorValuesSize ];
@@ -108,36 +122,54 @@ void copyCurrentValue2ms () {
 }
 
 void checkCurrent20ms() {
-  if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) /* * ( 1000000 / readInterval / nmbrOfReadsIn20ms ) */ )
+  if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) )
     Serial.println("Cutoff! - 20ms");
+    relaisOFF();
 }
 
 void checkCurrent300ms() {
   if ( currentCapacity * currentThreshold300ms < sensorValueToCurrent ( sumSensorValues300ms / nmbrOfReadsIn300ms ) )
     Serial.println("Cutoff! - 300ms");
+    relaisOFF();
 }
 
 void checkCurrent2000ms() {
   if ( currentCapacity * currentThreshold2000ms < sensorValueToCurrent ( sumSensorValues2000ms / nmbrOfReadsIn2000ms ) )
     Serial.println("Cutoff! - 2000ms");
+    relaisOFF();
 }
 
 void checkCurrent10min() {
   if (currentCapacity * currentThreshold10min < sensorValueToCurrent ( sumSensorValues10min / nmbrOfReadsIn10min ) )
     Serial.println("Cutoff! - 10min");
+    relaisOFF();
 }
 
 float sensorValueToCurrent ( int sensorVal ) {
   return sensorVal * sensorValueToCurrentFactor;
 }
 
+void relaisOFF() {
+  digitalWrite ( relaisPin, LOW );
+  digitalWrite ( ledRelaisPin, HIGH );
+}
+
+void relaisON() {
+  digitalWrite ( relaisPin, HIGH );
+  digitalWrite ( ledRelaisPin, LOW );
+}
+
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
   Serial.begin(9600);
-  initializeSensorValueToCurrentFactor();
-  initializeZeroAmpereSensorVal();
-  initializeSensorValues();
+
+  pinMode ( sensorPin, INPUT );
+  pinMode ( buttonPin, INPUT_PULLUP );
+  pinMode ( relaisPin, OUTPUT );
+  pinMode ( ledRelaisPin, OUTPUT );
+
+  initializeSensor();
 
   Timer1.initialize ( readInterval );
   Timer1.attachInterrupt ( sensorRead );
@@ -147,6 +179,11 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
+  if ( LOW == digitalRead ( buttonPin ) ) {
+    noInterrupts();
+    initializeSensor();
+    interrupts();
+  }
   checkCurrent20ms();
   checkCurrent300ms();
   checkCurrent2000ms();
