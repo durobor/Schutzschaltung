@@ -37,7 +37,7 @@ const int ledRelaisPin = LED_BUILTIN;  // don't know either yet
 const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
 const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
 //volatile int relaisON = LOW;
-//volatile int buttonON = LOW;
+volatile int buttonState = LOW;
 int zeroAmpereSensorVal;
 float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
@@ -122,27 +122,19 @@ void copyCurrentValue2ms () {
 }
 
 void checkCurrent20ms() {
-  if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) )
-    Serial.println("Cutoff! - 20ms");
-    relaisOFF();
+  if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) ) relaisOFF();
 }
 
 void checkCurrent300ms() {
-  if ( currentCapacity * currentThreshold300ms < sensorValueToCurrent ( sumSensorValues300ms / nmbrOfReadsIn300ms ) )
-    Serial.println("Cutoff! - 300ms");
-    relaisOFF();
+  if ( currentCapacity * currentThreshold300ms < sensorValueToCurrent ( sumSensorValues300ms / nmbrOfReadsIn300ms ) ) relaisOFF();
 }
 
 void checkCurrent2000ms() {
-  if ( currentCapacity * currentThreshold2000ms < sensorValueToCurrent ( sumSensorValues2000ms / nmbrOfReadsIn2000ms ) )
-    Serial.println("Cutoff! - 2000ms");
-    relaisOFF();
+  if ( currentCapacity * currentThreshold2000ms < sensorValueToCurrent ( sumSensorValues2000ms / nmbrOfReadsIn2000ms ) ) relaisOFF();
 }
 
 void checkCurrent10min() {
-  if (currentCapacity * currentThreshold10min < sensorValueToCurrent ( sumSensorValues10min / nmbrOfReadsIn10min ) )
-    Serial.println("Cutoff! - 10min");
-    relaisOFF();
+  if (currentCapacity * currentThreshold10min < sensorValueToCurrent ( sumSensorValues10min / nmbrOfReadsIn10min ) ) relaisOFF();
 }
 
 float sensorValueToCurrent ( int sensorVal ) {
@@ -151,17 +143,20 @@ float sensorValueToCurrent ( int sensorVal ) {
 
 void relaisOFF() {
   digitalWrite ( relaisPin, LOW );
-  digitalWrite ( ledRelaisPin, HIGH );
+  digitalWrite ( ledRelaisPin, LOW );
+  buttonState = LOW;
 }
 
 void relaisON() {
   digitalWrite ( relaisPin, HIGH );
-  digitalWrite ( ledRelaisPin, LOW );
+  digitalWrite ( ledRelaisPin, HIGH );
+  buttonState = HIGH;
 }
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
+  
   Serial.begin(9600);
 
   pinMode ( sensorPin, INPUT );
@@ -179,7 +174,7 @@ void setup() {
 
 // the loop function runs over and over again forever
 void loop() {
-  if ( LOW == digitalRead ( buttonPin ) ) {
+  if ( LOW == digitalRead ( buttonPin ) && LOW == buttonState ) {
     noInterrupts();
     initializeSensor();
     interrupts();
