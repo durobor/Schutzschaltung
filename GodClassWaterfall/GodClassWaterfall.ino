@@ -29,15 +29,19 @@
 
   
  */
-const int sensorPin = A7;       // select the input pin for the potentiometer
-const int buttonPin = 7;        // the number of the pushbutton pinf
-//const int ledRelaisPin =  2;    // the number of the LED pin
-const int relaisPin = 666;
-const int ledRelaisPin = LED_BUILTIN;  // don't know either yet
+const int sensorPin = A7;       
+const int potentiometerPin = A1;        // currently not in use
+const int buttonPin = 7;
+const int relaisPin = 4;
+const int ledRelaisPin = 6;
+const int ledTwo = 5;                   // currently not in use  // could be used as PWM or LED
+const int ncPin = 3;                    // currently not in use
+const int ledMaxCurrentReached = 2;
+
 const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
 const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
-//volatile int relaisON = LOW;
-volatile int buttonState = LOW;
+//volatile int buttonState = LOW;
+volatile float potentiometerValue = 1.0;
 int zeroAmpereSensorVal = 0;
 float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
@@ -121,7 +125,7 @@ void sensorRead() {
   sensorValuesIndx = ( sensorValuesIndx + 1 ) % sensorValuesSize;
 
   if ( sensorValuesSize-1 == sensorValuesIndx ) copyCurrentValue2ms();
-  
+
   interrupts();
 }
 
@@ -132,20 +136,33 @@ void copyCurrentValue2ms () {
   sumSensorValues10min += sensorValues10min [ sensorValuesIndx10min ];
 }
 
+void readPotentiometer() {
+  potentiometerValue = analogRead ( potentiometerPin ) / 1023.;
+}
+
 void checkCurrent20ms() {
-  if ( currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) ) relaisOFF();
+  if ( potentiometerValue * currentCapacity * currentThreshold20ms < sensorValueToCurrent ( sumSensorValues20ms / nmbrOfReadsIn20ms ) )
+    tresholdReached();
 }
 
 void checkCurrent300ms() {
-  if ( currentCapacity * currentThreshold300ms < sensorValueToCurrent ( sumSensorValues300ms / nmbrOfReadsIn300ms ) ) relaisOFF();
+  if ( potentiometerValue * currentCapacity * currentThreshold300ms < sensorValueToCurrent ( sumSensorValues300ms / nmbrOfReadsIn300ms ) )
+    tresholdReached();
 }
 
 void checkCurrent2000ms() {
-  if ( currentCapacity * currentThreshold2000ms < sensorValueToCurrent ( sumSensorValues2000ms / nmbrOfReadsIn2000ms ) ) relaisOFF();
+  if ( potentiometerValue * currentCapacity * currentThreshold2000ms < sensorValueToCurrent ( sumSensorValues2000ms / nmbrOfReadsIn2000ms ) )
+    tresholdReached();
 }
 
 void checkCurrent10min() {
-  if (currentCapacity * currentThreshold10min < sensorValueToCurrent ( sumSensorValues10min / nmbrOfReadsIn10min ) ) relaisOFF();
+  if ( potentiometerValue * currentCapacity * currentThreshold10min < sensorValueToCurrent ( sumSensorValues10min / nmbrOfReadsIn10min ) )
+    tresholdReached();
+}
+
+void tresholdReached() {
+  relaisOFF();
+  digitalWrite ( ledMaxCurrentReached, HIGH );
 }
 
 float sensorValueToCurrent ( int sensorVal ) {
@@ -155,25 +172,30 @@ float sensorValueToCurrent ( int sensorVal ) {
 void relaisOFF() {
   digitalWrite ( relaisPin, LOW );
   digitalWrite ( ledRelaisPin, LOW );
-  buttonState = LOW;
+//  buttonState = LOW;
 }
 
 void relaisON() {
   digitalWrite ( relaisPin, HIGH );
   digitalWrite ( ledRelaisPin, HIGH );
-  buttonState = HIGH;
+  digitalWrite ( ledMaxCurrentReached, LOW );
+//  buttonState = HIGH;
 }
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
   
-  Serial.begin(9600);
+//  Serial.begin(9600);
 
   pinMode ( sensorPin, INPUT );
   pinMode ( buttonPin, INPUT_PULLUP );
   pinMode ( relaisPin, OUTPUT );
   pinMode ( ledRelaisPin, OUTPUT );
+  pinMode ( ledMaxCurrentReached, OUTPUT );
+//  pinMode ( potentiometerPin, INPUT );        // currently not in use
+//  pinMode ( ledTwo, OUTPUT );                 // currently not in use
+//  pinMode ( ncPin, OUTPUT );                  // currently not in use
 
   Timer1.initialize ( readInterval );
   Timer1.attachInterrupt ( sensorRead );
@@ -192,9 +214,10 @@ void loop() {
     
     interrupts();
   }
+
+//  readPotentiometer();                      // currently not in use
   checkCurrent20ms();
   checkCurrent300ms();
   checkCurrent2000ms();
   checkCurrent10min();
-  Serial.println ( zeroAmpereSensorVal, DEC );
 }
