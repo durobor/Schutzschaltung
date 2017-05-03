@@ -32,13 +32,13 @@
 const int sensorPin = A7;       // select the input pin for the potentiometer
 const int buttonPin = 7;        // the number of the pushbutton pinf
 //const int ledRelaisPin =  2;    // the number of the LED pin
-const int relaisPin = 666;      // don't know yet
+const int relaisPin = 666;
 const int ledRelaisPin = LED_BUILTIN;  // don't know either yet
 const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
 const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
 //volatile int relaisON = LOW;
 volatile int buttonState = LOW;
-int zeroAmpereSensorVal;
+int zeroAmpereSensorVal = 0;
 float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
 volatile int sensorValues10min[300];
@@ -52,10 +52,10 @@ int nmbrOfReadsIn20ms = 5;
 int nmbrOfReadsIn300ms = 75;
 int nmbrOfReadsIn2000ms = 500;
 int nmbrOfReadsIn10min = 300;
-volatile float sumSensorValues20ms = 0;
-volatile float sumSensorValues300ms = 0;
-volatile float sumSensorValues2000ms = 0;
-volatile float sumSensorValues10min = 0;
+volatile long sumSensorValues20ms = 0;
+volatile long sumSensorValues300ms = 0;
+volatile long sumSensorValues2000ms = 0;
+volatile long sumSensorValues10min = 0;
 int currentCapacity = 630;      // 630mA
 int currentThreshold4ms = 20;
 int currentThreshold20ms = 10;
@@ -66,8 +66,8 @@ int currentThreshold10min = 2.1;
 void initializeSensor() {
   relaisOFF();
   initializeSensorValueToCurrentFactor();
+  initializeSensorValuesToZero();
   initializeZeroAmpereSensorVal();
-  initializeSensorValues();
   relaisON();
 }
 
@@ -76,10 +76,15 @@ void initializeSensorValueToCurrentFactor() {
 }
 
 void initializeZeroAmpereSensorVal() {
-  zeroAmpereSensorVal = 512;
+  interrupts();
+  
+  delay ( ( readInterval * nmbrOfReadsIn2000ms / 1000 ) + 10 );
+  zeroAmpereSensorVal = sumSensorValues2000ms / nmbrOfReadsIn2000ms;
+  
+  noInterrupts();
 }
 
-void initializeSensorValues() {
+void initializeSensorValuesToZero() {
   sensorValuesSize = ( sizeof ( sensorValues ) / sizeof ( int ) );
   for ( sensorValuesIndx = 0 ; sensorValuesSize > sensorValuesIndx ; sensorValuesIndx++ ) {
     sensorValues [ sensorValuesIndx ] = 0;
@@ -91,6 +96,12 @@ void initializeSensorValues() {
     sensorValues10min [ sensorValuesIndx10min ] = 0;
   }
   sensorValuesIndx10min = 0;
+
+  zeroAmpereSensorVal = 0;
+  sumSensorValues20ms = 0;
+  sumSensorValues300ms = 0;
+  sumSensorValues2000ms = 0;
+  sumSensorValues10min = 0;
 }
 
 void sensorRead() {
@@ -164,23 +175,26 @@ void setup() {
   pinMode ( relaisPin, OUTPUT );
   pinMode ( ledRelaisPin, OUTPUT );
 
-  initializeSensor();
-
   Timer1.initialize ( readInterval );
   Timer1.attachInterrupt ( sensorRead );
+
+  initializeSensor();
 
   interrupts();
 }
 
 // the loop function runs over and over again forever
 void loop() {
-  if ( LOW == digitalRead ( buttonPin ) && LOW == buttonState ) {
+  if ( LOW == digitalRead ( buttonPin ) /*&& LOW == buttonState*/ ) {
     noInterrupts();
+    
     initializeSensor();
+    
     interrupts();
   }
   checkCurrent20ms();
   checkCurrent300ms();
   checkCurrent2000ms();
   checkCurrent10min();
+  Serial.println ( zeroAmpereSensorVal, DEC );
 }
