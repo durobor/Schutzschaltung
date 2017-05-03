@@ -38,9 +38,11 @@ const int ledTwo = 5;                   // currently not in use  // could be use
 const int ncPin = 3;                    // currently not in use
 const int ledMaxCurrentReached = 2;
 
+bool relaisState = false;
+const int debounce = 100;
 const int sensorCurrentScaling = 185;   // datasheet says 185mV/A
 const int sensorOffsetVal = 2500;    // datasheet says 0.5*Vcc=2.5V, Vcc=5V
-//volatile int buttonState = LOW;
+volatile int buttonState = LOW;
 volatile float potentiometerValue = 1.0;
 int zeroAmpereSensorVal = 0;
 float sensorValueToCurrentFactor;
@@ -60,7 +62,7 @@ volatile long sumSensorValues20ms = 0;
 volatile long sumSensorValues300ms = 0;
 volatile long sumSensorValues2000ms = 0;
 volatile long sumSensorValues10min = 0;
-int currentCapacity = 630;      // 630mA
+int currentCapacity = 400;      // 630mA
 int currentThreshold4ms = 20;
 int currentThreshold20ms = 10;
 int currentThreshold300ms = 4;
@@ -72,7 +74,6 @@ void initializeSensor() {
   initializeSensorValueToCurrentFactor();
   initializeSensorValuesToZero();
   initializeZeroAmpereSensorVal();
-  relaisON();
 }
 
 void initializeSensorValueToCurrentFactor() {
@@ -163,30 +164,33 @@ void checkCurrent10min() {
 void tresholdReached() {
   relaisOFF();
   digitalWrite ( ledMaxCurrentReached, HIGH );
+  delay ( 5000 );
 }
 
 float sensorValueToCurrent ( int sensorVal ) {
-  return sensorVal * sensorValueToCurrentFactor;
+  return sensorVal * sensorValueToCurrentFactor * 1000;
 }
 
 void relaisOFF() {
   digitalWrite ( relaisPin, LOW );
   digitalWrite ( ledRelaisPin, LOW );
-//  buttonState = LOW;
+  buttonState = LOW;
+  relaisState = false;
 }
 
 void relaisON() {
   digitalWrite ( relaisPin, HIGH );
   digitalWrite ( ledRelaisPin, HIGH );
   digitalWrite ( ledMaxCurrentReached, LOW );
-//  buttonState = HIGH;
+  buttonState = HIGH;
+  relaisState = true;
 }
 
 // the setup function runs once when you press reset or power the board
 void setup() {
   noInterrupts();
   
-//  Serial.begin(9600);
+  Serial.begin(9600);
 
   pinMode ( sensorPin, INPUT );
   pinMode ( buttonPin, INPUT_PULLUP );
@@ -208,16 +212,19 @@ void setup() {
 // the loop function runs over and over again forever
 void loop() {
   if ( LOW == digitalRead ( buttonPin ) /*&& LOW == buttonState*/ ) {
-    noInterrupts();
-    
-    initializeSensor();
-    
-    interrupts();
+    delay ( debounce );
+    if ( LOW == digitalRead ( buttonPin ) ) {
+      relaisState = !relaisState;
+      delay ( 300 ); 
+    }
   }
+  if ( relaisState == true ) relaisON();
+  else relaisOFF();
 
 //  readPotentiometer();                      // currently not in use
   checkCurrent20ms();
   checkCurrent300ms();
   checkCurrent2000ms();
   checkCurrent10min();
+  Serial.println ( sensorValueToCurrent ( sensorValues [ sensorValuesIndx ] ), DEC );
 }
