@@ -47,6 +47,7 @@ volatile float potentiometerValue = 1.0;
 int zeroAmpereSensorVal = 0;
 float sensorValueToCurrentFactor;
 volatile int sensorValues[500];
+volatile int readIn;
 volatile int sensorValues10min[300];
 int sensorValuesSize;
 int sensorValuesSize10min;
@@ -63,11 +64,11 @@ volatile long sumSensorValues300ms = 0;
 volatile long sumSensorValues2000ms = 0;
 volatile long sumSensorValues10min = 0;
 int currentCapacity = 400;      // 630mA
-int currentThreshold4ms = 20;
-int currentThreshold20ms = 10;
-int currentThreshold300ms = 4;
-int currentThreshold2000ms = 2.75;
-int currentThreshold10min = 2.1;
+int currentThreshold4ms = 8;   // used to be 20
+int currentThreshold20ms = 6;  // used to be 10
+int currentThreshold300ms = 3; // 4
+int currentThreshold2000ms = 2; // 2.75
+int currentThreshold10min = 1.5; //2.1
 
 void initializeSensor() {
   relaisOFF();
@@ -113,7 +114,12 @@ void sensorRead() {
   noInterrupts();
     
   sumSensorValues2000ms -= sensorValues [ sensorValuesIndx ];
-  sensorValues [ sensorValuesIndx ] = abs ( analogRead ( sensorPin ) - zeroAmpereSensorVal );
+  readIn = analogRead ( sensorPin );
+  readIn = abs ( readIn );
+  readIn -= zeroAmpereSensorVal;
+  readIn = abs ( readIn );
+  //sensorValues [ sensorValuesIndx ] = abs ( analogRead ( sensorPin )  - zeroAmpereSensorVal );
+  sensorValues [ sensorValuesIndx ] = readIn;
   if ( currentCapacity * currentThreshold4ms < sensorValueToCurrent ( sensorValues [ sensorValuesIndx ] ) ) relaisOFF();
   sumSensorValues2000ms += sensorValues [ sensorValuesIndx ];
   
@@ -131,10 +137,11 @@ void sensorRead() {
 }
 
 void copyCurrentValue2ms () {
-  sensorValues10min [ sensorValuesIndx10min ] = sumSensorValues2000ms;
-
   sumSensorValues10min -= sensorValues10min [ ( sensorValuesSize10min + sensorValuesIndx10min - nmbrOfReadsIn10min ) % sensorValuesSize10min ];
+  sensorValues10min [ sensorValuesIndx10min ] = sumSensorValues2000ms;
   sumSensorValues10min += sensorValues10min [ sensorValuesIndx10min ];
+ 
+  sensorValuesIndx10min = ( sensorValuesIndx10min + 1 ) % sensorValuesSize10min;
 }
 
 void readPotentiometer() {
@@ -226,5 +233,5 @@ void loop() {
   checkCurrent300ms();
   checkCurrent2000ms();
   checkCurrent10min();
-  Serial.println ( sensorValueToCurrent ( sensorValues [ sensorValuesIndx ] ), DEC );
+  Serial.println ( sensorValues [ sensorValuesIndx ], DEC );
 }
